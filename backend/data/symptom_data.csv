@@ -1,0 +1,48 @@
+text,condition,triage
+"fever and body pain","Viral Fever",Medium
+"high fever with chills","Malaria (suspected)",Medium
+"fever headache and weakness","Viral Fever",Medium
+"mild fever since morning","Viral Fever",Low
+"fever with rash and joint pain","Dengue (suspected)",High
+"fever with low platelets and rash","Dengue (suspected)",High
+"cough and cold","Common Cold",Low
+"dry cough for three days","Upper Respiratory Infection",Low
+"cough with fever and breathlessness","Possible Pneumonia / COVID",High
+"cough and sore throat","Common Cold",Low
+"breathlessness and chest tightness","Possible Pneumonia / COVID",High
+"chest pain and sweating","Cardiac Emergency",High
+"severe chest pain radiating to arm","Cardiac Emergency",High
+"stomach ache and vomiting","Gastroenteritis",Medium
+"loose motions and stomach pain","Gastroenteritis",Medium
+"vomiting and dehydration","Gastroenteritis",Medium
+"severe stomach pain and vomiting blood","Possible GI Bleed",High
+"headache and dizziness","Tension Headache",Low
+"severe headache with blurred vision","Possible Hypertensive Emergency",High
+"headache and neck stiffness with fever","Possible Meningitis",High
+"body pain and weakness","Viral Fever",Low
+"joint pain and swelling","Possible Arthritis / Dengue",Medium
+"skin rash and itching","Allergic Reaction",Low
+"rash with swelling of face and breathing trouble","Severe Allergic Reaction (Anaphylaxis)",High
+"burning urination","Urinary Tract Infection",Low
+"burning urination with fever and back pain","Kidney Infection",Medium
+"toothache","Dental Issue",Low
+"ear pain and fever","Ear Infection",Low
+"eye redness and itching","Conjunctivitis",Low
+"cut on hand bleeding heavily","Severe Bleeding / Trauma",High
+"fall from height with leg pain and swelling","Possible Fracture",High
+"snake bite","Snake Bite Emergency",High
+"unconscious and not responding","Medical Emergency - Unconscious",High
+"seizure or fits","Possible Seizure Disorder",High
+"severe stomach pain lower right side","Possible Appendicitis",High
+"cold hands feet and confusion","Possible Shock",High
+"mild cough no fever","Common Cold",Low
+"sore throat and mild fever","Common Cold",Low
+"back pain after lifting weight","Muscle Strain",Low
+"diarrhea for one day","Mild Gastroenteritis",Low
+"diarrhea for five days with blood","Severe Gastroenteritis",High
+"pregnancy with bleeding","Obstetric Emergency",High
+"pregnancy with mild nausea","Normal Pregnancy Symptom",Low
+"child with high fever and rash","Possible Measles",Medium
+"child not eating and crying continuously","Pediatric Concern",Medium
+"difficulty breathing at night","Possible Asthma",Medium
+"wheezing and shortness of breath","Possible Asthma Attack",High
