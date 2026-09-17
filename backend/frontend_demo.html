@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SwasthyaSetu AI</title>
+<style>
+  :root {
+    --bg: #f4f7f6;
+    --card: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --primary: #0f766e;
+    --primary-dark: #0b5c56;
+    --low: #16a34a;
+    --medium: #d97706;
+    --high: #dc2626;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 60px;
+  }
+  .app { width: 100%; max-width: 560px; }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; color: var(--primary-dark); }
+  .tagline { color: var(--muted); font-size: 0.92rem; margin: 0; }
+  select {
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: white;
+    font-size: 0.9rem;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    margin-bottom: 16px;
+  }
+  textarea, input[type=text] {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 80px;
+  }
+  button {
+    margin-top: 12px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 1rem;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: var(--primary-dark); }
+  button.secondary {
+    background: transparent;
+    color: var(--primary-dark);
+    border: 1px solid var(--primary);
+  }
+  .questions-list { margin: 0 0 14px; padding-left: 20px; color: var(--text); }
+  .questions-list li { margin-bottom: 6px; }
+  .badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    color: white;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .badge.low { background: var(--low); }
+  .badge.medium { background: var(--medium); }
+  .badge.high { background: var(--high); }
+  .emergency-banner {
+    background: #fef2f2;
+    border: 1px solid var(--high);
+    color: #991b1b;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    font-weight: 600;
+  }
+  .emergency-banner a { color: #991b1b; }
+  .result-row { margin-bottom: 14px; }
+  .result-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin-bottom: 4px; }
+  .remedies-list { margin: 6px 0 0; padding-left: 20px; }
+  .remedies-list li { margin-bottom: 6px; }
+  .disclaimer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 10px; margin-top: 8px; }
+  .hidden { display: none !important; }
+  footer { text-align: center; color: var(--muted); font-size: 0.8rem; margin-top: 24px; }
+  .status { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+  .error { color: var(--high); font-size: 0.9rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <div>
+      <h1 data-i18n="app_title">SwasthyaSetu AI</h1>
+      <p class="tagline" data-i18n="app_tagline">Describe your symptoms in your own words - we'll help you figure out what to do next.</p>
+    </div>
+    <div>
+      <label for="langSelect" style="display:block; font-size:0.75rem; color:var(--muted);" data-i18n="language_label">Language</label>
+      <select id="langSelect"></select>
+    </div>
+  </header>
+
+  <!-- STEP 1: initial symptom input -->
+  <div class="card" id="symptomCard">
+    <textarea id="symptomInput" data-i18n-placeholder="input_placeholder"
+      placeholder="e.g. fever and body pain since yesterday"></textarea>
+    <button id="submitSymptoms" data-i18n="submit_button">Check my symptoms</button>
+    <div id="step1Status" class="status hidden"></div>
+    <div id="step1Error" class="error hidden"></div>
+  </div>
+
+  <!-- STEP 2: follow-up questions -->
+  <div class="card hidden" id="followupCard">
+    <p data-i18n="followup_heading" style="font-weight:600;">Just a couple of quick questions:</p>
+    <ul class="questions-list" id="questionsList"></ul>
+    <textarea id="followupInput" data-i18n-placeholder="followup_placeholder"
+      placeholder="Type your answer here"></textarea>
+    <button id="submitFollowup" data-i18n="followup_submit_button">Submit answers</button>
+    <div id="step2Status" class="status hidden"></div>
+    <div id="step2Error" class="error hidden"></div>
+  </div>
+
+  <!-- STEP 3: result -->
+  <div class="card hidden" id="resultCard">
+    <div id="emergencyBanner" class="emergency-banner hidden">
+      <div data-i18n="emergency_banner">This looks urgent - please seek emergency care right away.</div>
+      <a href="tel:108" data-i18n="call_ambulance">Call 108 for an ambulance</a>
+    </div>
+
+    <div class="result-row">
+      <div class="result-label" data-i18n="result_condition_label">Possible condition</div>
+      <div id="resultCondition" style="font-size:1.1rem; font-weight:600;"></div>
+    </div>
+
+    <div class="result-row">
+      <div class="result-label" data-i18n="result_triage_label">Urgency level</div>
+      <span id="resultTriageBadge" class="badge"></span>
+    </div>
+
+    <div class="result-row">
+      <div class="result-label" data-i18n="result_advice_label">What to do</div>
+      <div id="resultAdvice"></div>
+    </div>
+
+    <div class="result-row">
+      <div class="result-label" data-i18n="result_remedies_label">Home care tips</div>
+      <ul class="remedies-list" id="resultRemedies"></ul>
+    </div>
+
+    <div class="disclaimer">
+      <span data-i18n="result_disclaimer_label">Please note</span>: <span id="resultDisclaimer"></span>
+    </div>
+
+    <button class="secondary" id="resetButton" data-i18n="new_check_button">Check different symptoms</button>
+  </div>
+
+  <footer data-i18n="footer_text">Demo project - not a substitute for professional medical advice.</footer>
+</div>
+
+<script>
+// Point this at wherever your Flask backend is running/deployed.
+const API_BASE = "http://localhost:5000";
+
+let currentLang = "en";
+let currentSessionId = null;
+let uiStrings = {};
+
+const el = (id) => document.getElementById(id);
+
+async function apiGet(path) {
+  const res = await fetch(`${API_BASE}${path}`);
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  return res.json();
+}
+
+async function apiPost(path, body) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `POST ${path} failed: ${res.status}`);
+  return data;
+}
+
+function applyUIStrings(strings) {
+  uiStrings = strings;
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    const key = node.getAttribute("data-i18n");
+    if (strings[key]) node.textContent = strings[key];
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    const key = node.getAttribute("data-i18n-placeholder");
+    if (strings[key]) node.setAttribute("placeholder", strings[key]);
+  });
+}
+
+async function loadLanguages() {
+  const languages = await apiGet("/api/languages");
+  const select = el("langSelect");
+  select.innerHTML = "";
+  Object.entries(languages).forEach(([code, name]) => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = name;
+    if (code === currentLang) opt.selected = true;
+    select.appendChild(opt);
+  });
+}
+
+async function switchLanguage(lang) {
+  currentLang = lang;
+  try {
+    const strings = await apiGet(`/api/ui-strings?lang=${encodeURIComponent(lang)}`);
+    applyUIStrings(strings);
+  } catch (e) {
+    console.error("Could not load UI strings, keeping current text:", e);
+  }
+}
+
+function resetToStep1() {
+  currentSessionId = null;
+  el("symptomInput").value = "";
+  el("followupInput").value = "";
+  el("symptomCard").classList.remove("hidden");
+  el("followupCard").classList.add("hidden");
+  el("resultCard").classList.add("hidden");
+  el("step1Error").classList.add("hidden");
+  el("step2Error").classList.add("hidden");
+}
+
+function showFollowup(data) {
+  currentSessionId = data.session_id;
+  const list = el("questionsList");
+  list.innerHTML = "";
+  data.questions.forEach((q) => {
+    const li = document.createElement("li");
+    li.textContent = q.text;
+    list.appendChild(li);
+  });
+  el("symptomCard").classList.add("hidden");
+  el("followupCard").classList.remove("hidden");
+  el("resultCard").classList.add("hidden");
+}
+
+function showResult(data) {
+  currentSessionId = null;
+  el("resultCondition").textContent = data.condition;
+
+  const badge = el("resultTriageBadge");
+  badge.textContent = data.triage;
+  badge.className = "badge " + (data.triage || "").toLowerCase();
+
+  el("resultAdvice").textContent = data.advice;
+
+  const remediesList = el("resultRemedies");
+  remediesList.innerHTML = "";
+  (data.home_remedies || []).forEach((tip) => {
+    const li = document.createElement("li");
+    li.textContent = tip;
+    remediesList.appendChild(li);
+  });
+
+  el("resultDisclaimer").textContent = data.disclaimer || "";
+  el("emergencyBanner").classList.toggle("hidden", !data.is_emergency);
+
+  el("symptomCard").classList.add("hidden");
+  el("followupCard").classList.add("hidden");
+  el("resultCard").classList.remove("hidden");
+}
+
+async function handleSubmitSymptoms() {
+  const text = el("symptomInput").value.trim();
+  el("step1Error").classList.add("hidden");
+  if (!text) return;
+
+  el("step1Status").classList.remove("hidden");
+  el("step1Status").textContent = uiStrings.loading_text || "Thinking...";
+
+  try {
+    const data = await apiPost("/api/analyze-symptoms", {
+      symptoms: text,
+      language: currentLang,
+    });
+    el("step1Status").classList.add("hidden");
+    if (data.stage === "followup") {
+      showFollowup(data);
+    } else {
+      showResult(data);
+    }
+  } catch (e) {
+    el("step1Status").classList.add("hidden");
+    el("step1Error").textContent = uiStrings.error_text || "Something went wrong. Please try again.";
+    el("step1Error").classList.remove("hidden");
+    console.error(e);
+  }
+}
+
+async function handleSubmitFollowup() {
+  const text = el("followupInput").value.trim();
+  el("step2Error").classList.add("hidden");
+  if (!text || !currentSessionId) return;
+
+  el("step2Status").classList.remove("hidden");
+  el("step2Status").textContent = uiStrings.loading_text || "Thinking...";
+
+  try {
+    const data = await apiPost("/api/analyze-symptoms", {
+      symptoms: text,
+      language: currentLang,
+      session_id: currentSessionId,
+    });
+    el("step2Status").classList.add("hidden");
+    showResult(data);
+  } catch (e) {
+    el("step2Status").classList.add("hidden");
+    el("step2Error").textContent = uiStrings.error_text || "Something went wrong. Please try again.";
+    el("step2Error").classList.remove("hidden");
+    console.error(e);
+  }
+}
+
+el("submitSymptoms").addEventListener("click", handleSubmitSymptoms);
+el("submitFollowup").addEventListener("click", handleSubmitFollowup);
+el("resetButton").addEventListener("click", resetToStep1);
+el("langSelect").addEventListener("change", (e) => switchLanguage(e.target.value));
+
+(async function init() {
+  await loadLanguages();
+  await switchLanguage(currentLang);
+})();
+</script>
+</body>
+</html>
