@@ -38,6 +38,13 @@
       backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.5);
     }
+    /* Same shape/border as .glass-card, but a solid white background
+       instead of the translucent frosted look - used for the symptom
+       checker card only. */
+    .glass-card-solid {
+      background: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
     .symptom-tag { transition: all 0.2s ease; }
     .symptom-tag:hover { transform: scale(1.05); }
   </style>
@@ -62,14 +69,14 @@
 
     <!-- AI Symptom Checker -->
     <section id="symptoms" class="py-16 px-4 sm:px-6 lg:px-8">
-      <div class="max-w-3xl mx-auto">
+      <div class="max-w-3xl mx-auto -translate-x-2 sm:-translate-x-4 lg:-translate-x-8">
         <div class="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary text-sm font-medium mb-4">
           <span></span> AI-Powered
         </div>
         <h2 class="text-3xl font-bold mb-4">Symptom Checker</h2>
         <p class="text-gray-600 mb-8">Describe your symptoms and  Our AI gives an instant, non-diagnostic guidance level.</p>
 
-        <div class="glass-card p-6 rounded-2xl mb-6">
+        <div class="glass-card-solid p-6 rounded-2xl mb-6 shadow-lg">
           <div class="flex items-center gap-3 mb-4">
             <label for="language-select" class="text-sm text-gray-500 whitespace-nowrap">🌐 Language:</label>
             <select id="language-select" class="px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-primary focus:outline-none">
@@ -128,7 +135,7 @@
     <!-- Offline Mode for Villages -->
     <section class="py-16 px-4 sm:px-6 lg:px-8 bg-white/50">
       <div class="max-w-5xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
-        <div class="glass-card p-8 rounded-3xl">
+        <div class="glass-card p-8 rounded-3xl lg:order-2">
           <h3 class="font-semibold mb-6 flex items-center gap-3">
             <span class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">📱</span>
             SMS Conversation Preview
@@ -154,7 +161,7 @@
             <p class="text-sm text-amber-800 flex items-center gap-2"><span>💡</span> No app, no internet, no smartphone needed — works over plain SMS on any phone.</p>
           </div>
         </div>
-        <div>
+        <div class="lg:order-1">
           <div class="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 rounded-full text-amber-700 text-sm font-medium mb-4">
             <span>📶</span> Low Connectivity Mode
           </div>
@@ -201,44 +208,151 @@
       input.value = input.value ? input.value + ', ' + symptom : symptom;
     }
 
+    // English fallback for the labels used inside the AI response card.
+    // Overwritten from the backend's /api/ui-strings whenever the language
+    // dropdown changes, so the result card matches the selected language
+    // (the condition/advice/remedies text itself is already translated
+    // by the backend - this just covers the surrounding labels).
+    const DEFAULT_UI_STRINGS = {
+      followup_heading: "Just a couple of quick questions:",
+      followup_placeholder: "Type your answer here",
+      result_condition_label: "Possible condition",
+      result_triage_label: "Urgency level",
+      result_remedies_label: "Home care tips",
+      result_disclaimer_label: "Please note",
+      emergency_banner: "This looks urgent - please seek emergency care right away.",
+      call_ambulance: "Call 108 for an ambulance",
+      new_check_button: "Check different symptoms",
+      loading_text: "Thinking...",
+      error_text: "Something went wrong. Please try again.",
+    };
+    let uiStrings = { ...DEFAULT_UI_STRINGS };
+
+    // The backend now often replies with a couple of follow-up questions
+    // before it gives a final result - this tracks that in-progress
+    // conversation so the next submit knows to send the same session_id.
+    let pendingSessionId = null;
+    const ORIGINAL_SYMPTOM_PLACEHOLDER = document.getElementById('symptom-input').placeholder;
+
+    async function loadUIStrings(lang) {
+      if (lang === 'en') {
+        uiStrings = { ...DEFAULT_UI_STRINGS };
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/ui-strings?lang=${encodeURIComponent(lang)}`);
+        if (!res.ok) throw new Error(`ui-strings failed: ${res.status}`);
+        const data = await res.json();
+        uiStrings = { ...DEFAULT_UI_STRINGS, ...data };
+      } catch (err) {
+        console.warn('Could not load translated UI strings, keeping English:', err);
+        uiStrings = { ...DEFAULT_UI_STRINGS };
+      }
+    }
+
     async function analyzeSymptoms() {
       const input = document.getElementById('symptom-input');
-      const symptoms = input.value.trim();
+      const text = input.value.trim();
       const responseDiv = document.getElementById('ai-response');
       const resultDiv = document.getElementById('ai-result');
 
-      if (!symptoms) return;
+      if (!text) return;
 
-      resultDiv.innerHTML = '<p class="text-gray-400">Analyzing...</p>';
+      resultDiv.innerHTML = `<p class="text-gray-400">${uiStrings.loading_text}</p>`;
       responseDiv.classList.remove('hidden');
 
       const language = document.getElementById('language-select').value;
+      const payload = { symptoms: text, language };
+      if (pendingSessionId) payload.session_id = pendingSessionId;
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/analyze-symptoms`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symptoms, language })
+          body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error('Request failed');
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Request failed');
 
-        const colors = { Low: 'green', Medium: 'yellow', High: 'red' };
-        const color = colors[data.triage] || 'gray';
+        input.value = '';
 
-        resultDiv.innerHTML = `
-          <p class="mb-2"><strong>Possible Condition:</strong> ${data.condition}</p>
-          <p class="mb-2">${data.advice}</p>
-          <div class="mt-4 p-3 bg-${color}-50 rounded-lg border border-${color}-200">
-            <p class="font-medium text-${color}-700">Emergency Level: ${data.triage}</p>
-          </div>`;
+        if (data.stage === 'followup') {
+          renderFollowup(data);
+        } else {
+          renderResult(data);
+        }
       } catch (err) {
-        resultDiv.innerHTML = `<p class="text-red-600">Could not reach the AI service. Make sure the backend is running at ${API_BASE_URL}.</p>`;
+        pendingSessionId = null;
+        input.placeholder = ORIGINAL_SYMPTOM_PLACEHOLDER;
+        resultDiv.innerHTML = `<p class="text-red-600">${uiStrings.error_text} (${API_BASE_URL})</p>`;
       }
+    }
+
+    // Stage 1 of 2: backend wants a couple of clarifying answers first.
+    // Reuses the same input box - the user's next submit is sent back
+    // with the same session_id so the backend can merge it in.
+    function renderFollowup(data) {
+      pendingSessionId = data.session_id;
+      document.getElementById('symptom-input').placeholder = uiStrings.followup_placeholder;
+
+      const resultDiv = document.getElementById('ai-result');
+      const questionsHtml = (data.questions || []).map(q => `<li>${q.text}</li>`).join('');
+      resultDiv.innerHTML = `
+        <p class="font-medium mb-2">${uiStrings.followup_heading}</p>
+        <ul class="list-disc list-inside space-y-1 text-gray-600 mb-3">${questionsHtml}</ul>
+        <p class="text-xs text-gray-400">Type your answer above and press send.</p>`;
+    }
+
+    // Stage 2 (or the only stage, for an obvious emergency): final result,
+    // now including the emergency banner, home remedies, and disclaimer
+    // the backend returns alongside condition/triage/advice.
+    function renderResult(data) {
+      pendingSessionId = null;
+      document.getElementById('symptom-input').placeholder = ORIGINAL_SYMPTOM_PLACEHOLDER;
+
+      const resultDiv = document.getElementById('ai-result');
+      const colors = { Low: 'green', Medium: 'yellow', High: 'red' };
+      const color = colors[data.triage] || 'gray';
+
+      const remedies = data.home_remedies || [];
+      const remediesHtml = remedies.length ? `
+        <div class="mt-4">
+          <p class="text-xs uppercase tracking-wide text-gray-400 mb-1">${uiStrings.result_remedies_label}</p>
+          <ul class="list-disc list-inside space-y-1">${remedies.map(r => `<li>${r}</li>`).join('')}</ul>
+        </div>` : '';
+
+      const emergencyHtml = data.is_emergency ? `
+        <div class="mt-4 p-3 bg-red-50 border border-red-300 rounded-lg">
+          <p class="font-semibold text-red-700 mb-1">${uiStrings.emergency_banner}</p>
+          <a href="tel:108" class="text-red-700 underline text-sm">${uiStrings.call_ambulance}</a>
+        </div>` : '';
+
+      resultDiv.innerHTML = `
+        <p class="mb-2"><strong>${uiStrings.result_condition_label}:</strong> ${data.condition}</p>
+        <p class="mb-2">${data.advice}</p>
+        <div class="mt-4 p-3 bg-${color}-50 rounded-lg border border-${color}-200">
+          <p class="font-medium text-${color}-700">${uiStrings.result_triage_label}: ${data.triage}</p>
+        </div>
+        ${emergencyHtml}
+        ${remediesHtml}
+        <p class="text-xs text-gray-400 mt-4"><strong>${uiStrings.result_disclaimer_label}:</strong> ${data.disclaimer || ''}</p>
+        <button onclick="resetSymptomChecker()" class="mt-4 text-sm text-primary underline">${uiStrings.new_check_button}</button>`;
+    }
+
+    function resetSymptomChecker() {
+      pendingSessionId = null;
+      const input = document.getElementById('symptom-input');
+      input.value = '';
+      input.placeholder = ORIGINAL_SYMPTOM_PLACEHOLDER;
+      document.getElementById('ai-response').classList.add('hidden');
     }
 
     document.getElementById('symptom-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') analyzeSymptoms();
+    });
+
+    document.getElementById('language-select').addEventListener('change', (e) => {
+      loadUIStrings(e.target.value);
     });
 
     // --- Voice input using the browser's built-in Speech Recognition ---
