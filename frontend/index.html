@@ -70,6 +70,22 @@
         <p class="text-gray-600 mb-8">Describe your symptoms in English or Hinglish. Our AI gives an instant, non-diagnostic guidance level.</p>
 
         <div class="glass-card p-6 rounded-2xl mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <label for="language-select" class="text-sm text-gray-500 whitespace-nowrap">🌐 Language:</label>
+            <select id="language-select" class="px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-primary focus:outline-none">
+              <option value="en" selected>English</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="bn">বাংলা (Bengali)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+              <option value="mr">मराठी (Marathi)</option>
+              <option value="gu">ગુજરાતી (Gujarati)</option>
+              <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="ml">മലയാളം (Malayalam)</option>
+              <option value="ur">اردو (Urdu)</option>
+            </select>
+          </div>
           <div class="flex items-center gap-4 mb-4">
             <div class="flex-1 relative">
               <input type="text" id="symptom-input" placeholder="Type your symptoms... (लक्षण टाइप करें)"
@@ -78,7 +94,12 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </button>
             </div>
+            <button id="mic-btn" onclick="startVoiceInput()" title="Speak your symptoms"
+              class="p-3 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-colors flex-shrink-0">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" /></svg>
+            </button>
           </div>
+          <p id="voice-status" class="text-xs text-emerald-600 mb-3 hidden"></p>
           <div class="flex flex-wrap gap-2">
             <span class="text-xs text-gray-500 mr-2">Common:</span>
             <button onclick="addSymptom('fever')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">🤒 Fever</button>
@@ -173,7 +194,7 @@
 
   <script>
     // Point this at wherever backend/app.py is running.
-    const API_BASE_URL = "https://swasthyasetu-ltng.onrender.com";
+    const API_BASE_URL = "http://localhost:5000";
 
     function addSymptom(symptom) {
       const input = document.getElementById('symptom-input');
@@ -191,11 +212,13 @@
       resultDiv.innerHTML = '<p class="text-gray-400">Analyzing...</p>';
       responseDiv.classList.remove('hidden');
 
+      const language = document.getElementById('language-select').value;
+
       try {
         const res = await fetch(`${API_BASE_URL}/api/analyze-symptoms`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ symptoms })
+          body: JSON.stringify({ symptoms, language })
         });
         if (!res.ok) throw new Error('Request failed');
         const data = await res.json();
@@ -217,6 +240,53 @@
     document.getElementById('symptom-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') analyzeSymptoms();
     });
+
+    // --- Voice input using the browser's built-in Speech Recognition ---
+    // Works in Chrome/Edge on desktop and Android. Not supported in Safari/iOS yet.
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = document.getElementById('mic-btn');
+    const voiceStatus = document.getElementById('voice-status');
+
+    // Maps our language dropdown codes to the locale codes Speech Recognition expects
+    const VOICE_LANG_MAP = {
+      en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', ta: 'ta-IN', te: 'te-IN',
+      mr: 'mr-IN', gu: 'gu-IN', pa: 'pa-IN', kn: 'kn-IN', ml: 'ml-IN', ur: 'ur-IN'
+    };
+
+    function startVoiceInput() {
+      if (!SpeechRecognition) {
+        voiceStatus.textContent = '🎤 Voice input is not supported in this browser. Try Chrome.';
+        voiceStatus.classList.remove('hidden');
+        return;
+      }
+
+      const selectedLang = document.getElementById('language-select').value;
+      const recognition = new SpeechRecognition();
+      recognition.lang = VOICE_LANG_MAP[selectedLang] || 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      micBtn.classList.add('animate-pulse', 'bg-red-100', 'text-red-600');
+      voiceStatus.textContent = '🎤 Listening... speak your symptoms now';
+      voiceStatus.classList.remove('hidden');
+
+      recognition.start();
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('symptom-input').value = transcript;
+        voiceStatus.textContent = `✅ Heard: "${transcript}"`;
+      };
+
+      recognition.onerror = (event) => {
+        voiceStatus.textContent = `⚠️ Could not hear you (${event.error}). Please try again or type instead.`;
+      };
+
+      recognition.onend = () => {
+        micBtn.classList.remove('animate-pulse', 'bg-red-100', 'text-red-600');
+        setTimeout(() => voiceStatus.classList.add('hidden'), 4000);
+      };
+    }
   </script>
 </body>
 </html>

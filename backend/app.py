@@ -21,6 +21,10 @@ import joblib
 from pathlib import Path
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from deep_translator import GoogleTranslator
+from langdetect import detect, DetectorFactory, LangDetectException
+
+DetectorFactory.seed = 0  # makes langdetect's output consistent every run
 
 BASE_DIR = Path(__file__).resolve().parent
 condition_model = joblib.load(BASE_DIR / "ml" / "condition_model.pkl")
@@ -28,6 +32,44 @@ triage_model = joblib.load(BASE_DIR / "ml" / "triage_model.pkl")
 
 app = Flask(__name__)
 CORS(app)  # allow the frontend (different origin) to call this API
+
+# Languages we actively support translating to/from.
+# Add more ISO 639-1 codes here any time — GoogleTranslator supports 100+.
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "hi": "Hindi",
+    "bn": "Bengali",
+    "ta": "Tamil",
+    "te": "Telugu",
+    "mr": "Marathi",
+    "gu": "Gujarati",
+    "pa": "Punjabi",
+    "kn": "Kannada",
+    "ml": "Malayalam",
+    "ur": "Urdu",
+}
+
+
+def detect_language(text: str) -> str:
+    """Best-effort language detection. Falls back to English on failure
+    (e.g. very short text, or text that's just an emoji)."""
+    try:
+        code = detect(text)
+        return code if code in SUPPORTED_LANGUAGES else "en"
+    except LangDetectException:
+        return "en"
+
+
+def translate_text(text: str, source: str, target: str) -> str:
+    """Translate text between languages. Returns the original text
+    unchanged if translation fails for any reason (e.g. no internet) —
+    we never want a translation hiccup to break the whole response."""
+    if not text or source == target:
+        return text
+    try:
+        return GoogleTranslator(source=source, target=target).translate(text)
+    except Exception:
+        return text
 
 EMERGENCY_KEYWORDS = [
     "chest pain", "unconscious", "not breathing", "seizure", "fits",
@@ -53,13 +95,28 @@ def is_emergency_override(text: str) -> bool:
     return any(kw in text for kw in EMERGENCY_KEYWORDS)
 
 
-def analyze(symptom_text: str) -> dict:
-    cleaned = clean_text(symptom_text)
+def analyze(symptom_text: str, user_language: str = None) -> dict:
+    """
+    Core pipeline, now multilingual:
+      1. Detect what language the person wrote in (or use user_language if given)
+      2. Translate their text to English (our ML model only understands English)
+      3. Run the existing ML model exactly as before
+      4. Translate the condition + advice back into the person's language
+    """
+    original_text = symptom_text
+    detected_lang = user_language or detect_language(original_text)
+
+    english_text = translate_text(original_text, source=detected_lang, target="en")
+    cleaned = clean_text(english_text)
+
     if not cleaned:
+        fallback_advice = "Please describe your symptoms, e.g. 'fever and headache'."
         return {
             "condition": "Unknown",
             "triage": "Low",
-            "advice": "Please describe your symptoms, e.g. 'fever and headache'.",
+            "advice": translate_text(fallback_advice, source="en", target=detected_lang),
+            "language": detected_lang,
+            "language_name": SUPPORTED_LANGUAGES.get(detected_lang, "English"),
         }
 
     condition = condition_model.predict([cleaned])[0]
@@ -71,10 +128,14 @@ def analyze(symptom_text: str) -> dict:
     if is_emergency_override(cleaned):
         triage = "High"
 
+    advice_en = TRIAGE_ADVICE[triage]
+
     return {
-        "condition": condition,
-        "triage": triage,
-        "advice": TRIAGE_ADVICE[triage],
+        "condition": translate_text(condition, source="en", target=detected_lang),
+        "triage": triage,  # keep Low/Medium/High in English — used for UI colors
+        "advice": translate_text(advice_en, source="en", target=detected_lang),
+        "language": detected_lang,
+        "language_name": SUPPORTED_LANGUAGES.get(detected_lang, "English"),
     }
 
 
@@ -82,11 +143,20 @@ def analyze(symptom_text: str) -> dict:
 def analyze_symptoms():
     data = request.get_json(silent=True) or {}
     symptom_text = data.get("symptoms", "")
+    # Optional: frontend can pass a language code (e.g. "hi") to skip
+    # auto-detection, useful when voice input already tells us the language.
+    user_language = data.get("language")
     if not symptom_text.strip():
         return jsonify({"error": "symptoms field is required"}), 400
 
-    result = analyze(symptom_text)
+    result = analyze(symptom_text, user_language=user_language)
     return jsonify(result)
+
+
+@app.route("/api/languages", methods=["GET"])
+def get_languages():
+    """So the frontend's language dropdown always matches what the backend supports."""
+    return jsonify(SUPPORTED_LANGUAGES)
 
 
 @app.route("/sms/webhook", methods=["POST"])
@@ -96,7 +166,8 @@ def sms_webhook():
     India-focused SMS gateways) will POST form data here whenever
     someone texts your toll-free number. Field names below match
     Twilio's format ('Body', 'From') — adjust if you use a different
-    provider.
+    provider. Language is auto-detected from the SMS text itself, so
+    a villager can text in Hindi, Bengali, Tamil, etc. with no setup.
     """
     incoming_msg = request.values.get("Body", "")
     sender = request.values.get("From", "unknown")
