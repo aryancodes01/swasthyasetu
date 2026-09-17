@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwasthyaSetu AI - Symptom Checker</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            poppins: ['Poppins', 'sans-serif'],
+            hindi: ['Noto Sans Devanagari', 'sans-serif']
+          },
+          colors: {
+            primary: '#0D9488',
+            secondary: '#F0FDF4',
+            accent: '#DC2626',
+            dark: '#1E293B',
+            light: '#F8FAFC'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    .gradient-mesh {
+      background:
+        radial-gradient(at 40% 20%, rgba(13, 148, 136, 0.15) 0px, transparent 50%),
+        radial-gradient(at 80% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+        radial-gradient(at 0% 50%, rgba(13, 148, 136, 0.1) 0px, transparent 50%);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .symptom-tag { transition: all 0.2s ease; }
+    .symptom-tag:hover { transform: scale(1.05); }
+  </style>
+</head>
+<body class="h-full font-poppins bg-light text-dark">
+  <div class="gradient-mesh min-h-full">
+
+    <!-- Header -->
+    <nav class="sticky top-0 z-50 glass-card shadow-lg">
+      <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center gap-3 h-16">
+          <div class="w-10 h-10 bg-gradient-to-br from-primary to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+            <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold text-primary">SwasthyaSetu AI</h1>
+            <p class="text-xs text-gray-500 font-hindi">स्वास्थ्य सेतु</p>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- AI Symptom Checker -->
+    <section id="symptoms" class="py-16 px-4 sm:px-6 lg:px-8">
+      <div class="max-w-3xl mx-auto">
+        <div class="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary text-sm font-medium mb-4">
+          <span>🤖</span> AI-Powered
+        </div>
+        <h2 class="text-3xl font-bold mb-4">Multilingual Symptom Checker</h2>
+        <p class="text-gray-600 mb-8">Describe your symptoms in English or Hinglish. Our AI gives an instant, non-diagnostic guidance level.</p>
+
+        <div class="glass-card p-6 rounded-2xl mb-6">
+          <div class="flex items-center gap-3 mb-4">
+            <label for="language-select" class="text-sm text-gray-500 whitespace-nowrap">🌐 Language:</label>
+            <select id="language-select" class="px-3 py-2 border-2 border-gray-200 rounded-xl text-sm focus:border-primary focus:outline-none">
+              <option value="en" selected>English</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="bn">বাংলা (Bengali)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+              <option value="mr">मराठी (Marathi)</option>
+              <option value="gu">ગુજરાતી (Gujarati)</option>
+              <option value="pa">ਪੰਜਾਬੀ (Punjabi)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="ml">മലയാളം (Malayalam)</option>
+              <option value="ur">اردو (Urdu)</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-4 mb-4">
+            <div class="flex-1 relative">
+              <input type="text" id="symptom-input" placeholder="Type your symptoms... (लक्षण टाइप करें)"
+                class="w-full px-4 py-3 pr-24 border-2 border-gray-200 rounded-xl focus:border-primary focus:outline-none transition-colors">
+              <button onclick="analyzeSymptoms()" class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </button>
+            </div>
+            <button id="mic-btn" onclick="startVoiceInput()" title="Speak your symptoms"
+              class="p-3 bg-emerald-100 text-emerald-600 rounded-xl hover:bg-emerald-200 transition-colors flex-shrink-0">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" /></svg>
+            </button>
+          </div>
+          <p id="voice-status" class="text-xs text-emerald-600 mb-3 hidden"></p>
+          <div class="flex flex-wrap gap-2">
+            <span class="text-xs text-gray-500 mr-2">Common:</span>
+            <button onclick="addSymptom('fever')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">🤒 Fever</button>
+            <button onclick="addSymptom('headache')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">🤕 Headache</button>
+            <button onclick="addSymptom('cough')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">😷 Cough</button>
+            <button onclick="addSymptom('body pain')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">💪 Body Pain</button>
+            <button onclick="addSymptom('stomach ache')" class="symptom-tag px-3 py-1 bg-gray-100 rounded-full text-sm hover:bg-primary hover:text-white transition-colors">🤢 Stomach</button>
+          </div>
+        </div>
+
+        <div id="ai-response" class="hidden glass-card p-6 rounded-2xl border-l-4 border-primary">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 bg-gradient-to-br from-primary to-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0">
+              <span class="text-2xl">🤖</span>
+            </div>
+            <div class="flex-1">
+              <h4 class="font-semibold mb-2">AI Analysis</h4>
+              <div id="ai-result" class="text-sm text-gray-600"></div>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-gray-400 mt-4 text-center">This tool gives general guidance only. It is not a medical diagnosis. In an emergency, call 108.</p>
+      </div>
+    </section>
+
+    <!-- Offline Mode for Villages -->
+    <section class="py-16 px-4 sm:px-6 lg:px-8 bg-white/50">
+      <div class="max-w-5xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+        <div class="glass-card p-8 rounded-3xl">
+          <h3 class="font-semibold mb-6 flex items-center gap-3">
+            <span class="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">📱</span>
+            SMS Conversation Preview
+          </h3>
+          <div class="bg-gray-900 rounded-2xl p-4 font-mono text-sm">
+            <div class="flex items-center gap-2 mb-4 pb-4 border-b border-gray-700">
+              <div class="w-3 h-3 bg-red-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
+              <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span class="text-gray-400 text-xs ml-2">SMS to 1800-XXX-XXXX</span>
+            </div>
+            <div class="space-y-3 text-green-400">
+              <p><span class="text-gray-500">You:</span> fever and cough for 2 days</p>
+              <p class="text-yellow-400 mt-4">---Auto-reply---</p>
+              <p class="text-white">SwasthyaSetu AI</p>
+              <p class="text-white">Possible: Viral Fever</p>
+              <p class="text-white">Urgency: Medium</p>
+              <p class="text-white">See a doctor within 24 hrs.</p>
+              <p class="text-white">Ambulance: 108</p>
+            </div>
+          </div>
+          <div class="mt-6 p-4 bg-amber-50 rounded-xl">
+            <p class="text-sm text-amber-800 flex items-center gap-2"><span>💡</span> No app, no internet, no smartphone needed — works over plain SMS on any phone.</p>
+          </div>
+        </div>
+        <div>
+          <div class="inline-flex items-center gap-2 px-4 py-2 bg-amber-100 rounded-full text-amber-700 text-sm font-medium mb-4">
+            <span>📶</span> Low Connectivity Mode
+          </div>
+          <h2 class="text-3xl font-bold mb-4">Offline Mode for Villages</h2>
+          <p class="text-gray-600 mb-8">Anyone without a smartphone can text their symptoms in plain language to our toll-free number and get an instant AI-generated triage reply straight to their message inbox.</p>
+          <div class="space-y-4">
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><span class="text-xl">📨</span></div>
+              <div>
+                <h4 class="font-medium mb-1">Text your symptoms</h4>
+                <p class="text-sm text-gray-600">e.g. "fever and cough" sent as a normal SMS</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><span class="text-xl">🤖</span></div>
+              <div>
+                <h4 class="font-medium mb-1">AI triage in seconds</h4>
+                <p class="text-sm text-gray-600">Same ML model as the web checker analyzes the message</p>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0"><span class="text-xl">📲</span></div>
+              <div>
+                <h4 class="font-medium mb-1">Reply lands in their inbox</h4>
+                <p class="text-sm text-gray-600">Condition guess, urgency level, and next step — no app required</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="py-8 px-4 text-center text-sm text-gray-400">
+      🚑 Ambulance: 108 &nbsp;|&nbsp; 🏥 Health Helpline: 104 &nbsp;|&nbsp; Made for India
+    </footer>
+  </div>
+
+  <script>
+    // Point this at wherever backend/app.py is running.
+    const API_BASE_URL = "http://localhost:5000";
+
+    function addSymptom(symptom) {
+      const input = document.getElementById('symptom-input');
+      input.value = input.value ? input.value + ', ' + symptom : symptom;
+    }
+
+    async function analyzeSymptoms() {
+      const input = document.getElementById('symptom-input');
+      const symptoms = input.value.trim();
+      const responseDiv = document.getElementById('ai-response');
+      const resultDiv = document.getElementById('ai-result');
+
+      if (!symptoms) return;
+
+      resultDiv.innerHTML = '<p class="text-gray-400">Analyzing...</p>';
+      responseDiv.classList.remove('hidden');
+
+      const language = document.getElementById('language-select').value;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/analyze-symptoms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symptoms, language })
+        });
+        if (!res.ok) throw new Error('Request failed');
+        const data = await res.json();
+
+        const colors = { Low: 'green', Medium: 'yellow', High: 'red' };
+        const color = colors[data.triage] || 'gray';
+
+        resultDiv.innerHTML = `
+          <p class="mb-2"><strong>Possible Condition:</strong> ${data.condition}</p>
+          <p class="mb-2">${data.advice}</p>
+          <div class="mt-4 p-3 bg-${color}-50 rounded-lg border border-${color}-200">
+            <p class="font-medium text-${color}-700">Emergency Level: ${data.triage}</p>
+          </div>`;
+      } catch (err) {
+        resultDiv.innerHTML = `<p class="text-red-600">Could not reach the AI service. Make sure the backend is running at ${API_BASE_URL}.</p>`;
+      }
+    }
+
+    document.getElementById('symptom-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') analyzeSymptoms();
+    });
+
+    // --- Voice input using the browser's built-in Speech Recognition ---
+    // Works in Chrome/Edge on desktop and Android. Not supported in Safari/iOS yet.
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const micBtn = document.getElementById('mic-btn');
+    const voiceStatus = document.getElementById('voice-status');
+
+    // Maps our language dropdown codes to the locale codes Speech Recognition expects
+    const VOICE_LANG_MAP = {
+      en: 'en-IN', hi: 'hi-IN', bn: 'bn-IN', ta: 'ta-IN', te: 'te-IN',
+      mr: 'mr-IN', gu: 'gu-IN', pa: 'pa-IN', kn: 'kn-IN', ml: 'ml-IN', ur: 'ur-IN'
+    };
+
+    function startVoiceInput() {
+      if (!SpeechRecognition) {
+        voiceStatus.textContent = '🎤 Voice input is not supported in this browser. Try Chrome.';
+        voiceStatus.classList.remove('hidden');
+        return;
+      }
+
+      const selectedLang = document.getElementById('language-select').value;
+      const recognition = new SpeechRecognition();
+      recognition.lang = VOICE_LANG_MAP[selectedLang] || 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      micBtn.classList.add('animate-pulse', 'bg-red-100', 'text-red-600');
+      voiceStatus.textContent = '🎤 Listening... speak your symptoms now';
+      voiceStatus.classList.remove('hidden');
+
+      recognition.start();
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('symptom-input').value = transcript;
+        voiceStatus.textContent = `✅ Heard: "${transcript}"`;
+      };
+
+      recognition.onerror = (event) => {
+        voiceStatus.textContent = `⚠️ Could not hear you (${event.error}). Please try again or type instead.`;
+      };
+
+      recognition.onend = () => {
+        micBtn.classList.remove('animate-pulse', 'bg-red-100', 'text-red-600');
+        setTimeout(() => voiceStatus.classList.add('hidden'), 4000);
+      };
+    }
+  </script>
+</body>
+</html>
