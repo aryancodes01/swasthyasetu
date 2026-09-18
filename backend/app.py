@@ -43,12 +43,16 @@ import uuid
 import logging
 import threading
 from pathlib import Path
+from functools import wraps
 
 import joblib
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 from deep_translator import GoogleTranslator
 from langdetect import detect, DetectorFactory, LangDetectException
+from twilio.twiml.messaging_response import MessagingResponse
+from twilio.request_validator import RequestValidator
 
 from remedies import get_remedies
 from followup import get_followup_questions, should_ask_followup, MAX_FOLLOWUP_QUESTIONS
@@ -72,6 +76,15 @@ except Exception as exc:  # pragma: no cover - fails fast & loud on boot
 app = Flask(__name__)
 CORS(app)  # allow the frontend (different origin) to call this API
 
+# Almost every host (Render, Railway, Heroku, a VPS behind nginx, etc.)
+# terminates HTTPS at a reverse proxy and forwards to Flask over plain
+# HTTP. Without this, request.url/request.scheme look like "http://..."
+# even though the public URL is "https://..." - which breaks Twilio
+# signature validation below (the signature is computed over the exact
+# public URL Twilio called). ProxyFix reads the standard X-Forwarded-*
+# headers those hosts already set, so request.url is correct again.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 # Languages we actively support translating to/from.
 # Add more ISO 639-1 codes here any time - GoogleTranslator supports 100+.
 SUPPORTED_LANGUAGES = {
@@ -89,6 +102,35 @@ SUPPORTED_LANGUAGES = {
 }
 
 DEFAULT_LANGUAGE = "en"
+
+# ---------------------------------------------------------------------------
+# Twilio SMS webhook security. Set the TWILIO_AUTH_TOKEN environment
+# variable (found in your Twilio Console dashboard) to turn this on - it
+# then rejects any POST to /sms/webhook that didn't genuinely come from
+# Twilio, so strangers can't spam your model or spoof SMS replies for
+# free. Left unset, /sms/webhook behaves exactly as before (useful for
+# local testing with curl before you've wired up Twilio at all).
+# ---------------------------------------------------------------------------
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+
+
+def validate_twilio_request(view_func):
+    @wraps(view_func)
+    def wrapped(*args, **kwargs):
+        if not TWILIO_AUTH_TOKEN:
+            return view_func(*args, **kwargs)  # validation not configured - allow through
+
+        validator = RequestValidator(TWILIO_AUTH_TOKEN)
+        signature = request.headers.get("X-Twilio-Signature", "")
+        is_valid = validator.validate(request.url, request.form, signature)
+        if not is_valid:
+            logger.warning("Rejected /sms/webhook request with invalid Twilio signature")
+            return ("Forbidden", 403)
+        return view_func(*args, **kwargs)
+
+    return wrapped
+
+
 
 # ---------------------------------------------------------------------------
 # In-memory conversation store, used to hold the "awaiting follow-up answers"
@@ -123,17 +165,59 @@ def detect_language(text: str) -> str:
         return "en"
 
 
+
+# Cache of (text, source, target) -> translated text. The condition names,
+# advice sentences, and remedy tips are all drawn from a small fixed set of
+# English strings (not user free-text), so once a given piece of content has
+# been translated into a language successfully, we never need to hit the
+# translation service for that exact combination again - it's reused for
+# every user from then on. This is the same trick /api/ui-strings already
+# uses for the page labels; applying it here too is what actually fixes
+# symptom/remedy translations, since analyze-symptoms makes many more
+# translation calls per request than ui-strings does, so it was hitting the
+# free Google Translate endpoint's rate limits far more easily.
+_TRANSLATION_CACHE = {}
+_TRANSLATION_CACHE_LOCK = threading.Lock()
+TRANSLATION_RETRY_ATTEMPTS = 2
+TRANSLATION_RETRY_DELAY_SECONDS = 0.4
+
+
 def translate_text(text: str, source: str, target: str) -> str:
     """Translate text between languages. Returns the original text
-    unchanged if translation fails for any reason (e.g. no internet) -
-    we never want a translation hiccup to break the whole response."""
+    unchanged if translation fails for any reason (e.g. no internet, or the
+    translation service rate-limiting us) - we never want a translation
+    hiccup to break the whole response. Successful translations are cached
+    and transient failures are retried once before giving up."""
     if not text or source == target:
         return text
-    try:
-        return GoogleTranslator(source=source, target=target).translate(text)
-    except Exception as exc:
-        logger.warning("Translation failed (%s -> %s): %s", source, target, exc)
-        return text
+
+    cache_key = (text, source, target)
+    with _TRANSLATION_CACHE_LOCK:
+        cached = _TRANSLATION_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    last_exc = None
+    for attempt in range(TRANSLATION_RETRY_ATTEMPTS):
+        try:
+            translated = GoogleTranslator(source=source, target=target).translate(text)
+        except Exception as exc:
+            last_exc = exc
+            translated = None
+
+        if translated:
+            with _TRANSLATION_CACHE_LOCK:
+                _TRANSLATION_CACHE[cache_key] = translated
+            return translated
+
+        if attempt < TRANSLATION_RETRY_ATTEMPTS - 1:
+            time.sleep(TRANSLATION_RETRY_DELAY_SECONDS)
+
+    logger.warning(
+        "Translation failed (%s -> %s) after %d attempt(s): %s",
+        source, target, TRANSLATION_RETRY_ATTEMPTS, last_exc,
+    )
+    return text
 
 
 def translate_list(items, source: str, target: str) -> list:
@@ -474,6 +558,7 @@ def ui_strings():
 # ---------------------------------------------------------------------------
 
 @app.route("/sms/webhook", methods=["POST"])
+@validate_twilio_request
 def sms_webhook():
     """
     Twilio-style incoming SMS webhook. Twilio (or Gupshup/Exotel/etc,
@@ -518,10 +603,13 @@ def sms_webhook():
         lines.append("Ambulance: 108")
         reply_text = "\n".join(lines)
 
-    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<Response><Message>{reply_text}</Message></Response>"""
-
-    return app.response_class(twiml, mimetype="text/xml")
+    # Built with Twilio's own MessagingResponse rather than a hand-rolled
+    # XML string, so characters like & or < in a translated reply (Hindi
+    # punctuation, etc.) get escaped correctly instead of producing
+    # malformed TwiML that Twilio would silently fail to deliver.
+    twiml = MessagingResponse()
+    twiml.message(reply_text)
+    return app.response_class(str(twiml), mimetype="text/xml")
 
 
 @app.route("/health", methods=["GET"])
